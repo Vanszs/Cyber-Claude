@@ -111,7 +111,7 @@ export const AVAILABLE_MODELS = {
   },
   // ZAPI models (GLM)
   'glm-4.6': {
-    id: 'glm-4-plus', // Assuming ID, user just said 'glm-4.6' but typically APIs use specific strings. Defaulting to passed model name or standard. User code used 'glm-4.6' as default param.
+    id: 'glm-4.6',
     name: 'GLM 4.6',
     description: 'Zhipu AI GLM 4.6 - High performance model',
     provider: 'zapi',
