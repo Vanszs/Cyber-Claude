@@ -1,5 +1,6 @@
 import inquirer from 'inquirer';
 import chalk from 'chalk';
+import * as readline from 'readline';
 import { ui } from '../utils/ui.js';
 import { CyberAgent } from '../agent/core.js';
 import { DesktopScanner } from '../agent/tools/scanner.js';
@@ -195,36 +196,44 @@ export class InteractiveSession {
     this.showModeStatus();
     this.showWelcome();
 
-    // Main session loop
-    while (true) {
-      try {
-        const prompt = this.getPrompt();
-        const { command } = await inquirer.prompt({
-          type: 'input',
-          name: 'command',
-          message: prompt,
-          prefix: '',
-        } as any);
+    // Simplified input loop using raw stdin to avoid EPERM on read() syscalls from libraries
+    const askQuestion = () => {
+      const promptText = this.getPrompt();
+      process.stdout.write(promptText + ' ');
 
-        if (!command || command.trim() === '') {
-          continue;
+      const onData = async (data: Buffer) => {
+        const input = data.toString().trim();
+        process.stdin.removeListener('data', onData); // Stop listening to process command
+
+        if (!input) {
+          askQuestion();
+          return;
         }
 
-        const trimmedCommand = command.trim();
-        this.state.commandHistory.push(trimmedCommand);
+        this.state.commandHistory.push(input);
 
-        // Handle commands
-        const shouldExit = await this.handleCommand(trimmedCommand);
-        if (shouldExit) {
-          break;
+        try {
+          const shouldExit = await this.handleCommand(input);
+          if (shouldExit) {
+            process.exit(0);
+          } else {
+            askQuestion();
+          }
+        } catch (error) {
+          ui.error(`Error: ${error}`);
+          askQuestion();
         }
-      } catch (error) {
-        // User pressed Ctrl+C or error occurred
-        console.log('\n');
-        ui.info('Exiting session...');
-        break;
-      }
-    }
+      };
+
+      process.stdin.once('data', onData);
+    };
+
+    // Ensure stdin is flowing
+    process.stdin.resume();
+    process.stdin.setEncoding('utf8');
+
+    // Handle initial prompt
+    askQuestion();
   }
 
   private getPrompt(): string {
