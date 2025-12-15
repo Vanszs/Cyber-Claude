@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "bun --watch src/cli/index.ts",
     "build": "bun build ./src/cli/index.ts --outdir ./dist --target node",
-    "start": "bun dist/index.js",
+    "start": "bun src/cli/index.ts",
     "test": "bun test"
   },
   "keywords": [
