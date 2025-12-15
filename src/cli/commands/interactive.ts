@@ -3,13 +3,13 @@ import { ui } from '../../utils/ui.js';
 import { config, validateConfig } from '../../utils/config.js';
 import { InteractiveSession } from '../session.js';
 import { AgentMode } from '../../agent/types.js';
-import { AVAILABLE_MODELS, getModelByKey, getModelById } from '../../utils/models.js';
+import { AVAILABLE_MODELS, getModelByKey, type ModelKey } from '../../utils/models.js';
 
 export function createInteractiveCommand(): Command {
   const command = new Command('interactive');
 
   // Determine default model from config or fallback
-  const defaultModelKey = Object.keys(AVAILABLE_MODELS).find(key =>
+  const defaultModelKey = (Object.keys(AVAILABLE_MODELS) as ModelKey[]).find(key =>
     AVAILABLE_MODELS[key].id === config.model
   ) || 'sonnet-4.5';
 

@@ -54,7 +54,7 @@ export class OpenAIProvider implements AIProvider {
 
       if (choice.message.tool_calls) {
         logger.info('OpenAI requested tool execution');
-        const toolCall = choice.message.tool_calls[0];
+        const toolCall = choice.message.tool_calls[0] as OpenAI.Chat.Completions.ChatCompletionMessageToolCall & { function: { name: string; arguments: string } };
         return {
           name: toolCall.function.name,
           input: JSON.parse(toolCall.function.arguments),

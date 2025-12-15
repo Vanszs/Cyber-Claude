@@ -374,7 +374,7 @@ export class WebScanner {
     if (!this.mcpClient) throw new Error("MCP Client not initialized in WebScanner");
 
     // In a real scenario, we might map 'templates' array to what the tool expects
-    const result = await this.mcpClient.callTool('nuclei', 'scan', {
+    const result = await this.mcpClient.callTool('nuclei_scan', {
       target: url,
       templates: templates.length > 0 ? templates : ['cves', 'owasp', 'vulnerabilities'],
     });
@@ -391,7 +391,7 @@ export class WebScanner {
     // This assumes the MCP tool handles the defaults or we pass a constructed URL
     const fuzzUrl = url.endsWith('/') ? `${url}FUZZ` : `${url}/FUZZ`;
 
-    const result = await this.mcpClient.callTool('ffuf', 'fuzz', {
+    const result = await this.mcpClient.callTool('ffuf_fuzz', {
       url: fuzzUrl,
       wordlist: wordlist
     });
@@ -405,7 +405,7 @@ export class WebScanner {
   async scanWithGobuster(url: string, mode: 'dir' | 'dns' | 'vhost' = 'dir'): Promise<GobusterResult> {
     if (!this.mcpClient) throw new Error("MCP Client not initialized in WebScanner");
 
-    const result = await this.mcpClient.callTool('gobuster', 'scan', {
+    const result = await this.mcpClient.callTool('gobuster_scan', {
       target: url,
       mode: mode,
       wordlist: 'common.txt' // default
@@ -420,7 +420,7 @@ export class WebScanner {
   async scanWithDirbuster(url: string): Promise<DirbusterResult> {
     if (!this.mcpClient) throw new Error("MCP Client not initialized in WebScanner");
 
-    const result = await this.mcpClient.callTool('dirbuster', 'scan', {
+    const result = await this.mcpClient.callTool('dirbuster_scan', {
       target: url,
       recursive: true
     });

@@ -33,7 +33,7 @@ class MockProvider implements AIProvider {
 }
 
 async function main() {
-    ui.banner('Dynamic Agent POC (Mocked)');
+    ui.banner();
 
     // Initialize with dummy key to pass validation
     const agent = new CyberAgent({
