@@ -4,26 +4,26 @@ export const MCP_SERVERS: MCPServerConfig[] = [
   {
     name: 'nuclei',
     enabled: true,
-    command: 'bunx',
-    args: ['-y', '@cyproxio/mcp-nuclei'],
+    command: 'bun',
+    args: ['x', '-y', '@cyproxio/mcp-nuclei'],
     env: { NUCLEI_TEMPLATES_PATH: '/root/nuclei-templates' },
   },
   {
     name: 'ffuf',
     enabled: true,
-    command: 'bunx',
-    args: ['-y', '@cyproxio/mcp-ffuf'],
+    command: 'bun',
+    args: ['x', '-y', '@cyproxio/mcp-ffuf'],
   },
   {
     name: 'gobuster',
     enabled: true,
-    command: 'bunx',
-    args: ['-y', '@cyproxio/mcp-gobuster'],
+    command: 'bun',
+    args: ['x', '-y', '@cyproxio/mcp-gobuster'],
   },
   {
     name: 'dirbuster',
     enabled: true,
-    command: 'bunx', // Assuming a wrapper or similar tool exists or using a generic runner
-    args: ['-y', '@cyproxio/mcp-dirbuster'],
+    command: 'bun', // Assuming a wrapper or similar tool exists or using a generic runner
+    args: ['x', '-y', '@cyproxio/mcp-dirbuster'],
   },
 ];
