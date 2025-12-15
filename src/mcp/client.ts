@@ -39,12 +39,20 @@ export class MCPClient {
       capabilities: {}
     });
 
-    await client.connect(transport);
+    // Add error handler to prevent crashing on connection errors
+    client.onerror = (error) => {
+      console.warn(`MCP Client error for ${config.name}:`, error);
+    };
 
-    this.clients.set(config.name, client);
-    this.transports.set(config.name, transport);
-
-    console.log(`Connected to MCP server: ${config.name}`);
+    try {
+      await client.connect(transport);
+      this.clients.set(config.name, client);
+      this.transports.set(config.name, transport);
+      console.log(`Connected to MCP server: ${config.name}`);
+    } catch (error) {
+      console.warn(`Failed to connect to MCP server ${config.name}:`, error);
+      // Do not rethrow, allow application to continue without this tool
+    }
   }
 
   async getAvailableTools() {
