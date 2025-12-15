@@ -196,25 +196,30 @@ export class InteractiveSession {
     this.showModeStatus();
     this.showWelcome();
 
-    // Simplified input loop using raw stdin to avoid EPERM on read() syscalls from libraries
+    // Use readline for more robust input handling
+    const readline = await import('readline');
+
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      terminal: process.stdin.isTTY ?? false
+    });
+
     const askQuestion = () => {
       const promptText = this.getPrompt();
-      process.stdout.write(promptText + ' ');
-
-      const onData = async (data: Buffer) => {
-        const input = data.toString().trim();
-        process.stdin.removeListener('data', onData); // Stop listening to process command
-
-        if (!input) {
+      rl.question(promptText + ' ', async (input: string) => {
+        if (!input || input.trim() === '') {
           askQuestion();
           return;
         }
 
-        this.state.commandHistory.push(input);
+        const trimmedInput = input.trim();
+        this.state.commandHistory.push(trimmedInput);
 
         try {
-          const shouldExit = await this.handleCommand(input);
+          const shouldExit = await this.handleCommand(trimmedInput);
           if (shouldExit) {
+            rl.close();
             process.exit(0);
           } else {
             askQuestion();
@@ -223,16 +228,22 @@ export class InteractiveSession {
           ui.error(`Error: ${error}`);
           askQuestion();
         }
-      };
-
-      process.stdin.once('data', onData);
+      });
     };
 
-    // Ensure stdin is flowing
-    process.stdin.resume();
-    process.stdin.setEncoding('utf8');
+    rl.on('close', () => {
+      console.log('\n');
+      ui.info('Session ended.');
+      process.exit(0);
+    });
 
-    // Handle initial prompt
+    rl.on('SIGINT', () => {
+      console.log('\n');
+      ui.info('Exiting session...');
+      rl.close();
+    });
+
+    // Start the prompt loop
     askQuestion();
   }
 
