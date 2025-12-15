@@ -3,16 +3,21 @@ import { ui } from '../../utils/ui.js';
 import { config, validateConfig } from '../../utils/config.js';
 import { InteractiveSession } from '../session.js';
 import { AgentMode } from '../../agent/types.js';
-import { AVAILABLE_MODELS, getModelByKey } from '../../utils/models.js';
+import { AVAILABLE_MODELS, getModelByKey, getModelById } from '../../utils/models.js';
 
 export function createInteractiveCommand(): Command {
   const command = new Command('interactive');
+
+  // Determine default model from config or fallback
+  const defaultModelKey = Object.keys(AVAILABLE_MODELS).find(key =>
+    AVAILABLE_MODELS[key].id === config.model
+  ) || 'sonnet-4.5';
 
   command
     .description('Start interactive session (persistent REPL mode)')
     .alias('i')
     .option('-m, --mode <mode>', 'Initial agent mode: base, redteam, blueteam, desktopsecurity, webpentest, osint, smartcontract', 'base')
-    .option('--model <model>', 'AI model to use: opus-4.1, opus-4, sonnet-4.5, sonnet-4, sonnet-3.7, haiku-3.5', 'sonnet-4.5')
+    .option('--model <model>', `AI model to use (default from .env: ${config.model})`)
     .action(async (options) => {
       const validation = validateConfig();
       if (!validation.valid) {
@@ -29,18 +34,24 @@ export function createInteractiveCommand(): Command {
         process.exit(1);
       }
 
-      // Validate and get model
-      const modelConfig = getModelByKey(options.model);
-      if (!modelConfig) {
-        ui.error(`Invalid model: ${options.model}`);
-        ui.info(`Valid models: ${Object.keys(AVAILABLE_MODELS).join(', ')}`);
-        process.exit(1);
+      // Get model - prefer CLI option, then env config  
+      let modelId = config.model; // Default from .env
+
+      if (options.model) {
+        // User specified model via CLI
+        const modelConfig = getModelByKey(options.model);
+        if (!modelConfig) {
+          ui.error(`Invalid model: ${options.model}`);
+          ui.info(`Valid models: ${Object.keys(AVAILABLE_MODELS).join(', ')}`);
+          process.exit(1);
+        }
+        modelId = modelConfig.id;
       }
 
       // Start interactive session
       const session = new InteractiveSession(
         options.mode as AgentMode,
-        modelConfig.id
+        modelId
       );
 
       await session.start();
