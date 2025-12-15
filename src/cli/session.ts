@@ -179,6 +179,7 @@ export class InteractiveSession {
         apiKey: config.anthropicApiKey,
         googleApiKey: config.googleApiKey,
         openaiApiKey: config.openaiApiKey,
+        zapiKey: config.zapiApiKey,
         model: selectedModel,
       }),
       mode: initialMode,
@@ -638,6 +639,7 @@ export class InteractiveSession {
         apiKey: config.anthropicApiKey,
         googleApiKey: config.googleApiKey,
         openaiApiKey: config.openaiApiKey,
+        zapiKey: config.zapiApiKey,
         model: model.id,
       });
       ui.success(`Switched to ${chalk.bold(model.name)}`);

@@ -8,6 +8,7 @@ export const config = {
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
   googleApiKey: process.env.GOOGLE_API_KEY || '',
   openaiApiKey: process.env.OPENAI_API_KEY || '',
+  zapiApiKey: process.env.ZAPI_API_KEY || '',
   ollamaBaseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
   logLevel: process.env.LOG_LEVEL || 'info',
   safeMode: process.env.SAFE_MODE !== 'false',
@@ -15,7 +16,7 @@ export const config = {
   model: process.env.MODEL || 'claude-sonnet-4-5',
   // Fallback options
   autoFallback: process.env.AUTO_FALLBACK !== 'false', // Default: true
-  preferredProvider: process.env.PREFERRED_PROVIDER as 'claude' | 'gemini' | 'ollama' | undefined,
+  preferredProvider: process.env.PREFERRED_PROVIDER as 'claude' | 'gemini' | 'ollama' | 'zapi' | undefined,
 };
 
 export function validateConfig(): { valid: boolean; errors: string[]; warnings: string[] } {
