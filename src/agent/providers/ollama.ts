@@ -10,7 +10,7 @@ export class OllamaProvider implements AIProvider {
     this.model = model;
   }
 
-  async chat(messages: ConversationMessage[], systemPrompt: string): Promise<string> {
+  async chat(messages: ConversationMessage[], systemPrompt: string, tools?: any[]): Promise<string | any> {
     try {
       logger.info(`Sending message to Ollama (${this.model})`);
 
@@ -19,29 +19,41 @@ export class OllamaProvider implements AIProvider {
         { role: 'system', content: systemPrompt },
         ...messages.map(msg => ({
           role: msg.role,
-          content: msg.content
+          content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
         }))
       ];
 
       // Set a long timeout for DeepSeek-R1 and other reasoning models
-      // DeepSeek-R1 can take 10+ minutes for complex reasoning
       const controller = new AbortController();
       const timeoutMs = 900000; // 15 minutes
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       try {
+        const payload: any = {
+          model: this.model,
+          messages: ollamaMessages,
+          stream: false,
+          options: {
+            temperature: 0.7,
+            num_ctx: 8192, // Context window
+          }
+        };
+
+        if (tools && tools.length > 0) {
+          payload.tools = tools.map(t => ({
+            type: 'function',
+            function: {
+              name: t.name,
+              description: t.description,
+              parameters: t.inputSchema
+            }
+          }));
+        }
+
         const response = await fetch(`${this.baseUrl}/api/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: this.model,
-            messages: ollamaMessages,
-            stream: false,
-            options: {
-              temperature: 0.7,
-              num_ctx: 8192, // Context window
-            }
-          }),
+          body: JSON.stringify(payload),
           signal: controller.signal,
         });
 
@@ -51,18 +63,24 @@ export class OllamaProvider implements AIProvider {
           throw new Error(`Ollama API returned status ${response.status}: ${await response.text()}`);
         }
 
-        const data = await response.json() as {
-          message?: {
-            content?: string;
-          };
-        };
+        const data: any = await response.json();
 
-        if (!data.message || !data.message.content) {
+        if (!data.message) {
           throw new Error('Invalid response from Ollama API');
         }
 
+        if (data.message.tool_calls) {
+          logger.info('Ollama requested tool execution');
+          const call = data.message.tool_calls[0];
+          return {
+            name: call.function.name,
+            input: call.function.arguments,
+            id: 'ollama_call_' + Date.now()
+          };
+        }
+
         logger.info('Received response from Ollama');
-        return data.message.content;
+        return data.message.content || '';
       } finally {
         clearTimeout(timeoutId);
       }

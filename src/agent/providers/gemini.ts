@@ -11,19 +11,31 @@ export class GeminiProvider implements AIProvider {
     this.model = model;
   }
 
-  async chat(messages: ConversationMessage[], systemPrompt: string): Promise<string> {
+  async chat(messages: ConversationMessage[], systemPrompt: string, tools?: any[]): Promise<string | any> {
     try {
       logger.info(`Sending message to Gemini (${this.model})`);
 
-      const genModel = this.client.getGenerativeModel({
+      const modelParams: any = {
         model: this.model,
         systemInstruction: systemPrompt,
-      });
+      };
+
+      if (tools && tools.length > 0) {
+        modelParams.tools = [{
+          functionDeclarations: tools.map(t => ({
+            name: t.name,
+            description: t.description,
+            parameters: t.inputSchema
+          }))
+        }];
+      }
+
+      const genModel = this.client.getGenerativeModel(modelParams);
 
       // Convert conversation history to Gemini format
       const history = messages.slice(0, -1).map(msg => ({
         role: msg.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: msg.content }],
+        parts: [{ text: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content) }],
       }));
 
       // Get the last user message
@@ -38,10 +50,21 @@ export class GeminiProvider implements AIProvider {
       });
 
       // Send the last message
-      const result = await chat.sendMessage(lastMessage.content);
+      const result = await chat.sendMessage(typeof lastMessage.content === 'string' ? lastMessage.content : JSON.stringify(lastMessage.content));
       const response = result.response;
-      const text = response.text();
 
+      const functionCalls = response.functionCalls();
+      if (functionCalls && functionCalls.length > 0) {
+        const call = functionCalls[0];
+        logger.info('Gemini requested tool execution');
+        return {
+          name: call.name,
+          input: call.args,
+          id: 'gemini_call_' + Date.now()
+        };
+      }
+
+      const text = response.text();
       logger.info('Received response from Gemini');
       return text;
     } catch (error) {

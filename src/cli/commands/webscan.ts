@@ -7,7 +7,8 @@ import { getModelByKey } from '../../utils/models.js';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { WebScanResult } from '../../agent/types.js';
-// MCP tools removed - no working packages found
+import { MCPClient } from '../../mcp/client.js';
+
 
 /**
  * Save scan results to the /scans directory as markdown
@@ -142,6 +143,8 @@ function formatScanMarkdown(result: WebScanResult, analysis?: string): string {
   return lines.join('\n');
 }
 
+
+
 export function createWebScanCommand(): Command {
   const command = new Command('webscan');
 
@@ -157,6 +160,11 @@ export function createWebScanCommand(): Command {
     .option('--timeout <ms>', 'Request timeout in milliseconds', '10000')
     .option('--test-types <types>', 'Vulnerability types to test (comma-separated): sqli,xss,cmd_injection,path_traversal,ssrf', 'sqli,xss,cmd_injection,path_traversal,ssrf')
     .option('--max-payloads <number>', 'Maximum payloads per vulnerability type', '10')
+    // MCP Tool Options
+    .option('--nuclei', 'Run Nuclei vulnerability scanner')
+    .option('--ffuf', 'Run FFUF directory fuzzing')
+    .option('--gobuster', 'Run Gobuster for directory/DNS enumeration')
+    .option('--dirbuster', 'Run Dirbuster (via MCP)')
     .action(async (url: string, options) => {
       const validation = validateConfig();
       if (!validation.valid) {
@@ -176,22 +184,27 @@ export function createWebScanCommand(): Command {
         modelId = modelConfig.id;
       }
 
-      const scanner = new WebScanner();
+      // Initialize MCP Client
+      const mcpClient = new MCPClient();
+      try {
+        await mcpClient.connectAll();
+      } catch (err) {
+        ui.warning(`MCP Connection Issue: ${err}`);
+      }
+
+      const scanner = new WebScanner(mcpClient);
 
       try {
         console.log('');
         ui.section(`Web Security Scan: ${url}`);
         console.log('');
 
-        // Progress callback
         const onProgress = (message: string) => {
           console.log(message);
         };
 
-        // Perform scan based on options
         let result;
         if (options.aggressive) {
-          // Parse test types
           const testTypes = options.testTypes.split(',').map((t: string) => t.trim());
 
           result = await scanner.aggressiveScan(url, {
@@ -255,11 +268,67 @@ export function createWebScanCommand(): Command {
           ui.success('No security issues found!');
         }
 
-        // MCP Security Tool Scans removed - no working MCP packages found
+        // --- MCP Tool Execution ---
+
+        let mcpAnalysisData: any = {};
+
+        if (options.nuclei) {
+          ui.section('MCP: Nuclei Scan');
+          try {
+            const nucleiResult = await scanner.scanWithNuclei(url);
+            console.log(`Nuclei found ${nucleiResult.results.length} issues.`);
+            nucleiResult.results.forEach(r => {
+              ui.finding(r.info.severity as any || 'info', `Nuclei: ${r.info.name}`, r.info.description || '');
+            });
+            mcpAnalysisData.nuclei = nucleiResult;
+          } catch (e: any) {
+            ui.error(`Nuclei scan failed: ${e.message}`);
+          }
+        }
+
+        if (options.ffuf) {
+          ui.section('MCP: FFUF Scan');
+          try {
+            const ffufResult = await scanner.scanWithFfuf(url);
+            console.log(`FFUF found ${ffufResult.results.length} paths.`);
+            ffufResult.results.slice(0, 5).forEach(r => {
+              console.log(`- ${r.url} (Status: ${r.status})`);
+            });
+            if (ffufResult.results.length > 5) console.log(`...and ${ffufResult.results.length - 5} more.`);
+            mcpAnalysisData.ffuf = ffufResult;
+          } catch (e: any) {
+            ui.error(`FFUF scan failed: ${e.message}`);
+          }
+        }
+
+        if (options.gobuster) {
+          ui.section('MCP: Gobuster Scan');
+          try {
+            const gobusterResult = await scanner.scanWithGobuster(url);
+            console.log(`Gobuster found ${gobusterResult.found.length} items.`);
+            gobusterResult.found.slice(0, 5).forEach(r => {
+              console.log(`- ${r.path} (Status: ${r.status})`);
+            });
+            mcpAnalysisData.gobuster = gobusterResult;
+          } catch (e: any) {
+            ui.error(`Gobuster scan failed: ${e.message}`);
+          }
+        }
+
+        if (options.dirbuster) {
+          ui.section('MCP: Dirbuster Scan');
+          try {
+            const dirbusterResult = await scanner.scanWithDirbuster(url);
+            console.log(`Dirbuster found ${dirbusterResult.found.length} items.`);
+            mcpAnalysisData.dirbuster = dirbusterResult;
+          } catch (e: any) {
+            ui.error(`Dirbuster scan failed: ${e.message}`);
+          }
+        }
 
         // AI Analysis
         let analysis: string | undefined;
-        if (result.findings.length > 0) {
+        if (result.findings.length > 0 || Object.keys(mcpAnalysisData).length > 0) {
           const agent = new CyberAgent({
             mode: 'webpentest',
             apiKey: config.anthropicApiKey,
@@ -273,10 +342,11 @@ export function createWebScanCommand(): Command {
           const analysisData = {
             builtInFindings: result.findings,
             target: result.target,
+            mcpToolResults: mcpAnalysisData
           };
 
           analysis = await agent.analyze(
-            'Analyze these web security findings from the built-in scanner. Prioritize the issues, explain their impact, provide actionable remediation guidance. Focus on the most critical vulnerabilities first.',
+            'Analyze these web security findings from the built-in scanner and MCP tools. Prioritize the issues, explain their impact, provide actionable remediation guidance. Focus on the most critical vulnerabilities first.',
             analysisData
           );
           spinner.succeed('✓ AI analysis complete');
@@ -284,12 +354,15 @@ export function createWebScanCommand(): Command {
           console.log('\n' + ui.formatAIResponse(analysis) + '\n');
         }
 
-        // Save scan results
+        // Save scan results (todo: include MCP results in saved file)
         const savedPath = await saveScanResults(result, analysis);
         ui.success(`📁 Scan results saved to: ${savedPath}`);
 
+        await mcpClient.disconnectAll();
+
       } catch (error: any) {
         ui.error(`Web scan failed: ${error.message}`);
+        await mcpClient.disconnectAll();
         process.exit(1);
       }
     });

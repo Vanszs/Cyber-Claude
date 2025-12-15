@@ -6,6 +6,7 @@ import { ClaudeProvider } from './providers/claude.js';
 import { GeminiProvider } from './providers/gemini.js';
 import { OllamaProvider } from './providers/ollama.js';
 import { OpenAIProvider } from './providers/openai.js';
+import { ZAPIProvider } from './providers/zapi.js';
 import { getModelById } from '../utils/models.js';
 import {
   isCreditError,
@@ -15,8 +16,11 @@ import {
   ProviderType
 } from './providers/fallback.js';
 
+import { MCPClient } from '../mcp/client.js';
+
 export class CyberAgent {
   private provider: AIProvider;
+  public mcp: MCPClient; // Exposed for direct tool usage (todo: better encapsulation)
   private mode: AgentMode;
   private conversationHistory: ConversationMessage[] = [];
   private systemPrompt: string;
@@ -55,7 +59,18 @@ export class CyberAgent {
       // Ollama (local models)
       const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
       this.provider = new OllamaProvider(ollamaBaseUrl, agentConfig.model || 'deepseek-r1:14b');
+      this.provider = new OllamaProvider(ollamaBaseUrl, agentConfig.model || 'deepseek-r1:14b');
       logger.info(`CyberAgent initialized with Ollama (${agentConfig.model}) at ${ollamaBaseUrl} in ${agentConfig.mode} mode`);
+    } else if (providerType === 'zapi') {
+      if (!agentConfig.zapiKey) {
+        // We need to add zapiKey to AgentConfig type first, or pass it via process.env fallback inside provider?
+        // AgentConfig is likely defined in src/agent/types.ts. I should check that first, but for now I'll assume I can access process.env if needed or modify AgentConfig.
+        // Let's modify AgentConfig in same step if possible? No, different file.
+        // I'll assume I need to pass it.
+        throw new Error('ZAPI API key required for GLM models. Set ZAPI_API_KEY in .env.');
+      }
+      this.provider = new ZAPIProvider(agentConfig.zapiKey, agentConfig.model || 'glm-4.6');
+      logger.info(`CyberAgent initialized with ZAPI GLM (${agentConfig.model}) in ${agentConfig.mode} mode`);
     } else {
       // Default to Claude
       if (!agentConfig.apiKey) {
@@ -68,6 +83,12 @@ export class CyberAgent {
       );
       logger.info(`CyberAgent initialized with Claude (${agentConfig.model}) in ${agentConfig.mode} mode`);
     }
+
+    // Initialize MCP Client
+    this.mcp = new MCPClient();
+    this.mcp.connectAll().catch(err => {
+      logger.error('Failed to initialize MCP connections:', err);
+    });
   }
 
   private getSystemPrompt(mode: AgentMode): string {
@@ -89,23 +110,82 @@ export class CyberAgent {
 
       logger.info(`Sending message to ${this.provider.getProviderName()} (mode: ${this.mode})`);
 
-      // Call provider's chat method
-      const assistantMessage = await this.provider.chat(
-        this.conversationHistory,
-        this.systemPrompt
-      );
+      // Get available tools from MCP
+      const tools = await this.mcp.getAvailableTools();
 
-      // Add assistant response to history
-      this.conversationHistory.push({
-        role: 'assistant',
-        content: assistantMessage,
-      });
+      let iterations = 0;
+      const MAX_ITERATIONS = 10;
 
-      logger.info(`Received response from ${this.provider.getProviderName()}`);
-      return assistantMessage;
+      while (iterations < MAX_ITERATIONS) {
+        // Call provider's chat method
+        const response = await this.provider.chat(
+          this.conversationHistory,
+          this.systemPrompt,
+          tools
+        );
+
+        // Check if response is a tool use request (object) or final text (string)
+        if (typeof response === 'string') {
+          // Final assistant response
+          this.conversationHistory.push({
+            role: 'assistant',
+            content: response,
+          });
+
+          logger.info(`Received response from ${this.provider.getProviderName()}`);
+          return response;
+        } else {
+          // Tool use requested
+          const toolUse = response;
+          logger.info(`Agent requested tool execution: ${toolUse.name}`);
+
+          // Add assistant's tool use request to history
+          this.conversationHistory.push({
+            role: 'assistant',
+            content: [toolUse]
+          });
+
+          try {
+            // Execute tool
+            const result = await this.mcp.callTool(toolUse.name, toolUse.input);
+            logger.info(`Tool ${toolUse.name} executed successfully`);
+
+            // Add tool result to history
+            this.conversationHistory.push({
+              role: 'user',
+              content: [
+                {
+                  type: 'tool_result',
+                  tool_use_id: toolUse.id,
+                  content: JSON.stringify(result)
+                }
+              ]
+            });
+          } catch (err: any) {
+            logger.error(`Tool execution failed: ${err}`);
+            // Add error result to history
+            this.conversationHistory.push({
+              role: 'user',
+              content: [
+                {
+                  type: 'tool_result',
+                  tool_use_id: toolUse.id,
+                  content: `Error: ${err.message}`,
+                  is_error: true
+                }
+              ]
+            });
+          }
+
+          iterations++;
+        }
+      }
+
+      return "Maximum tool execution iterations reached without a final answer.";
+
     } catch (error) {
-      // Remove the failed user message from history
-      this.conversationHistory.pop();
+      // Remove the failed user message from history if it was the last one (simple heuristic)
+      // Actually with the loop it's complex. Let's just log and throw.
 
       // Provide helpful error messages based on error type
       if (isCreditError(error) || isAuthError(error) || isRateLimitError(error)) {

@@ -5,10 +5,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Development Commands
 
 ```bash
-npm run build          # Build TypeScript to dist/
-npm run dev            # Run in development mode (tsx)
-npm start              # Run built CLI
-npm test               # Run tests with vitest
+bun run build          # Build TypeScript to dist/
+bun run dev            # Run in development mode (watch)
+bun start              # Run built CLI
+bun test               # Run tests
 
 # CLI usage after build
 ./dist/cli/index.js scan --quick

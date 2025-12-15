@@ -8,10 +8,10 @@
     "cyber-claude": "./dist/cli/index.js"
   },
   "scripts": {
-    "dev": "tsx src/cli/index.ts",
-    "build": "tsc",
-    "start": "node dist/cli/index.js",
-    "test": "vitest"
+    "dev": "bun --watch src/cli/index.ts",
+    "build": "bun build ./src/cli/index.ts --outdir ./dist --target node",
+    "start": "bun dist/index.js",
+    "test": "bun test"
   },
   "keywords": [
     "cybersecurity",

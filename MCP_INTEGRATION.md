@@ -217,6 +217,41 @@ cyber-claude webscan https://example.com --from-recon
 
 ---
 
+### Phase 2.5: Directory & Parameter Fuzzing (New)
+
+#### 10. **FFUF MCP** ⭐⭐⭐⭐⭐
+**Integration Point**: `webscan --ffuf`
+
+**Capabilities:**
+- High-speed directory and parameter fuzzing
+- Web filtering capabilities
+- Custom dictionary support
+
+**Implementation:**
+```bash
+# Directory fuzzing
+cyber-claude webscan https://example.com --ffuf
+```
+
+#### 11. **Gobuster MCP** ⭐⭐⭐⭐
+**Integration Point**: `webscan --gobuster`
+
+**Capabilities:**
+- Directory/File enumeration (URIs)
+- DNS subdomain enumeration
+- VHost fuzzing
+
+#### 12. **Dirbuster MCP** ⭐⭐
+**Integration Point**: `webscan --dirbuster`
+*Note: Legacy tool support via wrapper or modern equivalent*
+
+**Capabilities:**
+- Java-based directory busting
+- Recursive scanning
+
+
+---
+
 #### 9. **Amass/Crt.sh MCPs** ⭐⭐⭐
 **Integration Point**: Subdomain enumeration
 
@@ -290,21 +325,27 @@ export const MCP_SERVERS: MCPServerConfig[] = [
   {
     name: 'nuclei',
     enabled: true,
-    command: 'npx',
+    command: 'bunx',
     args: ['-y', '@cyproxio/mcp-nuclei'],
     env: { NUCLEI_TEMPLATES_PATH: '/path/to/templates' },
   },
   {
     name: 'sslscan',
     enabled: true,
-    command: 'npx',
+    command: 'bunx',
     args: ['-y', '@cyproxio/mcp-sslscan'],
   },
   {
-    name: 'nmap',
-    enabled: false, // Requires installation
-    command: 'npx',
-    args: ['-y', '@cyproxio/mcp-nmap'],
+    name: 'ffuf',
+    enabled: true,
+    command: 'bunx',
+    args: ['-y', '@cyproxio/mcp-ffuf'],
+  },
+  {
+    name: 'gobuster',
+    enabled: true,
+    command: 'bunx',
+    args: ['-y', '@cyproxio/mcp-gobuster'],
   },
 ];
 ```
@@ -449,7 +490,9 @@ cyber-claude webscan https://example.com \\
     "@cyproxio/mcp-nmap": "latest",
     "@cyproxio/mcp-sqlmap": "latest",
     "@cyproxio/mcp-httpx": "latest",
-    "@cyproxio/mcp-katana": "latest"
+    "@cyproxio/mcp-katana": "latest",
+    "@cyproxio/mcp-ffuf": "latest",
+    "@cyproxio/mcp-gobuster": "latest"
   }
 }
 ```

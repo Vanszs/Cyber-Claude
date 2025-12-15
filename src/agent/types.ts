@@ -5,6 +5,7 @@ export interface AgentConfig {
   apiKey?: string;  // Anthropic API key (for Claude)
   googleApiKey?: string;  // Google API key (for Gemini)
   openaiApiKey?: string;  // OpenAI API key (for ChatGPT)
+  zapiKey?: string;  // ZAPI API key (for GLM)
   model?: string;
   maxTokens?: number;
   safeMode?: boolean;

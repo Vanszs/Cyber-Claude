@@ -13,22 +13,39 @@ export class ClaudeProvider implements AIProvider {
     this.maxTokens = maxTokens;
   }
 
-  async chat(messages: ConversationMessage[], systemPrompt: string): Promise<string> {
+  async chat(messages: ConversationMessage[], systemPrompt: string, tools?: any[]): Promise<string | any> {
     try {
       // Convert to Anthropic message format
       const anthropicMessages: Anthropic.MessageParam[] = messages.map(msg => ({
-        role: msg.role,
-        content: msg.content,
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content as string | Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam | Anthropic.ToolUseBlockParam | Anthropic.ToolResultBlockParam>,
       }));
 
       logger.info(`Sending message to Claude (${this.model})`);
 
-      const response = await this.client.messages.create({
+      const params: Anthropic.MessageCreateParams = {
         model: this.model,
         max_tokens: this.maxTokens,
         system: systemPrompt,
         messages: anthropicMessages,
-      });
+      };
+
+      if (tools && tools.length > 0) {
+        params.tools = tools.map(t => ({
+          name: t.name,
+          description: t.description || '',
+          input_schema: t.inputSchema
+        }));
+      }
+
+      const response = await this.client.messages.create(params);
+
+      // Check for tool use
+      const toolUseBlock = response.content.find(block => block.type === 'tool_use');
+      if (toolUseBlock) {
+        logger.info('Claude requested tool execution');
+        return toolUseBlock; // Return the raw tool use block
+      }
 
       // Extract text from response
       const assistantMessage = response.content

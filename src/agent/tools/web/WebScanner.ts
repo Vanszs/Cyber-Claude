@@ -7,6 +7,8 @@ import { URL } from 'url';
 import { v4 as uuidv4 } from 'uuid';
 import { VulnTester, VulnTestResult, TestTarget } from './testing/VulnTester.js';
 import { PayloadType } from './payloads/PayloadDatabase.js';
+import { MCPClient } from '../../../mcp/client.js';
+import { NucleiResult, FfufResult, GobusterResult, DirbusterResult } from '../../../mcp/types.js';
 
 export interface ScanOptions {
   timeout?: number;
@@ -23,18 +25,20 @@ export class WebScanner {
   private httpClient: HttpClient;
   private headerAnalyzer: HeaderAnalyzer;
   private authorization: Authorization;
+  private mcpClient?: MCPClient;
 
-  constructor() {
+  constructor(mcpClient?: MCPClient) {
     this.httpClient = new HttpClient();
     this.headerAnalyzer = new HeaderAnalyzer();
     this.authorization = new Authorization();
+    this.mcpClient = mcpClient;
   }
 
   /**
    * Quick security scan - headers and basic checks
    */
   async quickScan(url: string, options: ScanOptions = {}): Promise<WebScanResult> {
-    const progress = options.onProgress || (() => {});
+    const progress = options.onProgress || (() => { });
 
     // Authorization check
     progress('🔍 Validating URL and checking authorization...');
@@ -94,7 +98,7 @@ export class WebScanner {
    * Full vulnerability scan
    */
   async fullScan(url: string, options: ScanOptions = {}): Promise<WebScanResult> {
-    const progress = options.onProgress || (() => {});
+    const progress = options.onProgress || (() => { });
 
     // Start with quick scan
     const result = await this.quickScan(url, options);
@@ -160,7 +164,7 @@ export class WebScanner {
    * This performs active testing that sends potentially dangerous payloads.
    */
   async aggressiveScan(url: string, options: ScanOptions = {}): Promise<WebScanResult> {
-    const progress = options.onProgress || (() => {});
+    const progress = options.onProgress || (() => { });
 
     // Start with full scan
     const result = await this.fullScan(url, options);
@@ -359,5 +363,68 @@ export class WebScanner {
       low: findings.filter(f => f.severity === 'low').length,
       info: findings.filter(f => f.severity === 'info').length,
     };
+  }
+
+
+
+  /**
+   * Run Nuclei scan via MCP
+   */
+  async scanWithNuclei(url: string, templates: string[] = []): Promise<NucleiResult> {
+    if (!this.mcpClient) throw new Error("MCP Client not initialized in WebScanner");
+
+    // In a real scenario, we might map 'templates' array to what the tool expects
+    const result = await this.mcpClient.callTool('nuclei', 'scan', {
+      target: url,
+      templates: templates.length > 0 ? templates : ['cves', 'owasp', 'vulnerabilities'],
+    });
+
+    return result as unknown as NucleiResult;
+  }
+
+  /**
+   * Run FFUF directory/parameter fuzzing via MCP
+   */
+  async scanWithFfuf(url: string, wordlist: string = 'common.txt'): Promise<FfufResult> {
+    if (!this.mcpClient) throw new Error("MCP Client not initialized in WebScanner");
+    // Simplification: FFUF usually needs a specific command construction with FUZZ keyword
+    // This assumes the MCP tool handles the defaults or we pass a constructed URL
+    const fuzzUrl = url.endsWith('/') ? `${url}FUZZ` : `${url}/FUZZ`;
+
+    const result = await this.mcpClient.callTool('ffuf', 'fuzz', {
+      url: fuzzUrl,
+      wordlist: wordlist
+    });
+
+    return result as unknown as FfufResult;
+  }
+
+  /**
+   * Run Gobuster scan via MCP
+   */
+  async scanWithGobuster(url: string, mode: 'dir' | 'dns' | 'vhost' = 'dir'): Promise<GobusterResult> {
+    if (!this.mcpClient) throw new Error("MCP Client not initialized in WebScanner");
+
+    const result = await this.mcpClient.callTool('gobuster', 'scan', {
+      target: url,
+      mode: mode,
+      wordlist: 'common.txt' // default
+    });
+
+    return result as unknown as GobusterResult;
+  }
+
+  /**
+   * Run Dirbuster scan via MCP (wrapped)
+   */
+  async scanWithDirbuster(url: string): Promise<DirbusterResult> {
+    if (!this.mcpClient) throw new Error("MCP Client not initialized in WebScanner");
+
+    const result = await this.mcpClient.callTool('dirbuster', 'scan', {
+      target: url,
+      recursive: true
+    });
+
+    return result as unknown as DirbusterResult;
   }
 }

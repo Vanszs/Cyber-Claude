@@ -3,7 +3,7 @@ export interface AIProvider {
   /**
    * Send a message and get a response
    */
-  chat(messages: ConversationMessage[], systemPrompt: string): Promise<string>;
+  chat(messages: ConversationMessage[], systemPrompt: string, tools?: any[]): Promise<string | any>;
 
   /**
    * Get provider name
@@ -13,5 +13,5 @@ export interface AIProvider {
 
 export interface ConversationMessage {
   role: 'user' | 'assistant';
-  content: string;
+  content: string | any[];
 }
